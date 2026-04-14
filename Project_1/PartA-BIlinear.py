@@ -153,3 +153,83 @@ plt.tight_layout()
 plt.show()
 print("Notice the sparse, grid-like appearance of each channel — "
       "only 25% of positions are measured for B and R, 50% for G.")
+
+def bilinear_demosaic_bggr(bayer):
+    """
+    Reconstruct a full-colour BGR image from a BGGR Bayer array
+    using simple bilinear (averaging) interpolation.
+
+    Parameters
+    ----------
+    bayer : np.ndarray, shape (H, W), dtype uint8
+
+    Returns
+    -------
+    bgr : np.ndarray, shape (H, W, 3), dtype uint8
+             Channels ordered B, G, R  (OpenCV convention)
+    """
+    H, W = bayer.shape
+    # Work in float32 for intermediate averages
+    src = bayer.astype(np.float32)
+
+    # Pad by 1 pixel (reflect) so we never go out of bounds
+    p = np.pad(src, 1, mode='reflect')
+
+    # Allocate output channels
+    R_out = np.zeros((H, W), dtype=np.float32)
+    G_out = np.zeros((H, W), dtype=np.float32)
+    B_out = np.zeros((H, W), dtype=np.float32)
+
+    # Shifted views (offset by 1 because of padding)
+    # Centre
+    C   = p[1:-1, 1:-1]
+    # 4-neighbours (cross)
+    N   = p[0:-2, 1:-1]   # up
+    S   = p[2:  , 1:-1]   # down
+    W_  = p[1:-1, 0:-2]   # left
+    E   = p[1:-1, 2:  ]   # right
+    # 4-diagonal neighbours
+    NW  = p[0:-2, 0:-2]
+    NE  = p[0:-2, 2:  ]
+    SW  = p[2:  , 0:-2]
+    SE  = p[2:  , 2:  ]
+
+    # Boolean masks for the four Bayer site types
+    rows, cols = np.mgrid[0:H, 0:W]
+    is_B  = (rows % 2 == 0) & (cols % 2 == 0)   # even row, even col
+    is_Gr = (rows % 2 == 0) & (cols % 2 == 1)   # even row, odd col  (Green on Red row)
+    is_Gb = (rows % 2 == 1) & (cols % 2 == 0)   # odd row,  even col (Green on Blue row)
+    is_R  = (rows % 2 == 1) & (cols % 2 == 1)   # odd row,  odd col
+
+    # ── Blue sites (even row, even col) ──────────────────────────────────────
+    B_out[is_B] = C[is_B]                          # B is known
+    G_out[is_B] = (N[is_B] + S[is_B] + \
+                   W_[is_B] + E[is_B]) / 4.0       # G = avg cross neighbours
+    R_out[is_B] = (NW[is_B] + NE[is_B] + \
+                   SW[is_B] + SE[is_B]) / 4.0      # R = avg diagonal neighbours
+
+    # ── Green sites on a Blue row (even row, odd col) ────────────────────────
+    G_out[is_Gr] = C[is_Gr]                        # G is known
+    B_out[is_Gr] = (W_[is_Gr] + E[is_Gr]) / 2.0   # B = avg left & right
+    R_out[is_Gr] = (N[is_Gr] + S[is_Gr]) / 2.0   # R = avg up & down
+
+    # ── Green sites on a Red row (odd row, even col) ─────────────────────────
+    G_out[is_Gb] = C[is_Gb]                        # G is known
+    B_out[is_Gb] = (N[is_Gb] + S[is_Gb]) / 2.0     # B = avg up & down
+    R_out[is_Gb] = (W_[is_Gb] + E[is_Gb]) / 2.0   # R = avg left & right
+
+    # ── Red sites (odd row, odd col) ─────────────────────────────────────────
+    R_out[is_R] = C[is_R]                          # R is known
+    G_out[is_R] = (N[is_R] + S[is_R] + \
+                   W_[is_R] + E[is_R]) / 4.0       # G = avg cross neighbours
+    B_out[is_R] = (NW[is_R] + NE[is_R] + \
+                   SW[is_R] + SE[is_R]) / 4.0      # B = avg diagonal neighbours
+
+    # ── Clip, convert, stack into BGR image ──────────────────────────────────
+    B_out = np.clip(B_out, 0, 255).astype(np.uint8)
+    G_out = np.clip(G_out, 0, 255).astype(np.uint8)
+    R_out = np.clip(R_out, 0, 255).astype(np.uint8)
+
+    bgr = cv2.merge([B_out, G_out, R_out])   # OpenCV uses BGR order
+    return bgr
+
