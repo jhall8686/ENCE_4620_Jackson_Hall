@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import os
 from part_a_bilinear import bilinear_demosaic_bggr, load_bayer_txt, extract_bggr_channels
+
+
+
 # Display settings
 plt.rcParams['figure.dpi'] = 110
 plt.rcParams['axes.titlesize'] = 10
@@ -30,87 +33,113 @@ for info in IMAGE_INFO:
     bayer=load_bayer_txt(path, info["rows"], info["cols"])
     print(f"  Loaded {info['name']:8s}  shape={bayer.shape}  "
           f"dtype={bayer.dtype}  min={bayer.min()}  max={bayer.max()}")
-    
-
-# ── Demosaic using bilinear interpolation ────────────────────────────────
-
-
-
-bilinear_demosaiced = {}
-
-for name, bayer in bayer_images.items():
-    bilinear_demosaiced[name] = bilinear_demosaic_bggr(bayer)
 
 # ── Gradient-based correction ─────────────────────────────────────────────
 
-def gradient_correction(bilinear_demosaiced, bayer):
+# Gradient kernels
+
+G_AT_R = np.array([
+    [ 0,  0, -1,  0,  0],
+    [ 0,  0,  2,  0,  0],
+    [-1,  2,  4,  2, -1],
+    [ 0,  0,  2,  0,  0],
+    [ 0,  0, -1,  0,  0],
+], dtype=np.float32) / 8.0
+ 
+G_AT_B = G_AT_R  # symmetric
+ 
+# R at green pixel in R-row, B-column  (beta = 5/8)
+R_AT_G_RRow_BCol = np.array([
+    [ 0,  0,  0.5,  0,  0],
+    [ 0, -1,  0,  -1,  0],
+    [-1,  4,  5,   4, -1],
+    [ 0, -1,  0,  -1,  0],
+    [ 0,  0,  0.5, 0,  0],
+], dtype=np.float32) / 8.0
+ 
+# R at green pixel in B-row, R-column  (beta = 5/8)
+R_AT_G_BRow_RCol = np.array([
+    [ 0,  0, -1,  0,  0],
+    [ 0, -1,  4, -1,  0],
+    [ 0.5, 0, 5,  0,  0.5],
+    [ 0, -1,  4, -1,  0],
+    [ 0,  0, -1,  0,  0],
+], dtype=np.float32) / 8.0
+ 
+# R at B locations (gamma = 3/4)
+R_AT_B = np.array([
+    [ 0,  0, -1.5,  0,  0],
+    [ 0,  2,  0,   2,  0],
+    [-1.5, 0, 6,   0, -1.5],
+    [ 0,  2,  0,   2,  0],
+    [ 0,  0, -1.5,  0,  0],
+], dtype=np.float32) / 8.0
+
+# B kernels are symmetric counterparts of R kernels
+B_AT_G_BRow_RCol = R_AT_G_RRow_BCol
+B_AT_G_RRow_BCol = R_AT_G_BRow_RCol
+B_AT_R           = R_AT_B
+
+def gradient_correction(bayer):
     """
     Apply gradient-based correction to the bilinear demosaiced image.
     
     Parameters:
-        bilinear_demosaiced (np.ndarray): The bilinear demosaiced RGB image (H x W x 3).
         bayer (np.ndarray): The original Bayer pattern image (H x W).
     Returns:
         gradient_corrected (np.ndarray): The gradient-corrected RGB image (H x W x 3).
     """
-    
-
-    rB,gB,bB = extract_rgb_channels(bilinear_demosaiced)
 
     H, W = bayer.shape
     # Work in float32 for intermediate averages
     src = bayer.astype(np.float32)
 
-    # Pad by 2 pixels (reflect) so we never go out of bounds
-    p = np.pad(src, 2, mode='reflect')
+    R_in, G_in, B_in = extract_bggr_channels(bayer)
 
     # Allocate output channels
     R_out = np.zeros((H, W), dtype=np.float32)
     G_out = np.zeros((H, W), dtype=np.float32)
     B_out = np.zeros((H, W), dtype=np.float32)
 
-    C = p[2:-2, 2:-2]
+    # Boolean masks for the four Bayer site types- Using different syntax from the given bilinear algorithm, but I think this makes more sense to look at
+    is_B = np.zeros((H,W), bool)
+    is_Gr = np.zeros((H,W), bool)
+    is_Gb = np.zeros((H,W), bool)
+    is_R = np.zeros((H,W), bool)
 
-    # N,S,E,W correspond to p(i±2, j) and p(i, j±2) <-not AI, I found the alt code for ± it's alt+0177 :)
+    is_B[0::2, 0::2] = True   # even row, even col 
+    is_Gr[0::2, 1::2] = True   # even row, odd col
+    is_Gb[1::2, 0::2] = True   # odd row,  even col
+    is_R[1::2, 1::2] = True   # odd row,  odd col
     
-    N =  p[0:-3, 2:-2]
-    S =  p[3:  , 2:-2]
-    E =  p[2:-2, 3:  ]
-    W_=  p[2:-2, 0:-3]
+    # even rows are red rows, odd rows are blue rows
+    is_R_row = np.zeros((H, W), bool)
+    is_R_row[0::2, :] = True
+    is_B_row = ~is_R_row
+    is_R_col = np.zeros((H, W), bool)
+    is_R_col[:, 0::2] = True
+    is_B_col = ~is_R_col
+
+    # convolution helper function using cv2.filter2D
+    def conv(kernel):
+        return cv2.fliter2D(src, kernel, cv2.BORDER_REFLECT)
  
-    # 4-diagonal neighbours
-    NW  = p[0:-2, 0:-2]
-    NE  = p[0:-2, 2:  ]
-    SW  = p[2:  , 0:-2]
-    SE  = p[2:  , 2:  ]
-
-    # Boolean masks for the four Bayer site types
-    rows, cols = np.mgrid[0:H, 0:W]
-    is_B  = (rows % 2 == 0) & (cols % 2 == 0)   # even row, even col
-    is_Gr = (rows % 2 == 0) & (cols % 2 == 1)   # even row, odd col  (Green on Red row)
-    is_Gb = (rows % 2 == 1) & (cols % 2 == 0)   # odd row,  even col (Green on Blue row)
-    is_R  = (rows % 2 == 1) & (cols % 2 == 1)   # odd row,  odd col
- 
-    # GRADIENT CALCULATIONS
+    conv_G_on_R   = conv(G_AT_R)
+    conv_G_on_B   = conv(G_AT_B)
+    conv_R_on_GRrowBcol  = conv(R_AT_G_RRow_BCol)
+    conv_R_on_GBrowRcol  = conv(R_AT_G_BRow_RCol)
+    conv_R_on_B   = conv(R_AT_B)
+    conv_B_on_GBrowRcol  = conv(B_AT_G_BRow_RCol)
+    conv_B_on_GRrowBcol  = conv(B_AT_G_RRow_BCol)
+    conv_B_on_R   = conv(B_AT_R)
     
-    grad_R = C[is_R] - (N[is_R] + E[is_R] + S[is_R] + W_[is_R]) / 4.0
-    grad_B = C[is_B] - (N[is_B] + E[is_B] + S[is_B] + W_[is_B]) / 4.0
-    
-    # ??
+    # Constructing the filtered blue channel
 
+    B_out = np.where(is_R, conv_B_on_R, B_in)
+    B_out = np.where(is_)
+    # Constructing the filtered green channel
+    G_out = np.where(is_R, conv_G_on_R, G_in)
+    G_out = np.where(is_B, conv_G_on_B, G_in)
 
-def extract_rgb_channels(img):
-    """
-    Extract the R, G, B channels from an RGB image.
     
-    Parameters:
-        img (np.ndarray): The RGB image (H x W x 3).
-    Returns:
-        ch_R (np.ndarray): The R channel (H x W). 
-        ch_G (np.ndarray): The G channel (H x W).
-        ch_B (np.ndarray): The B channel (H x W).
-    """
-    ch_R = img[:, :, 0]
-    ch_G = img[:, :, 1]
-    ch_B = img[:, :, 2]
-    return ch_R, ch_G, ch_B
+
