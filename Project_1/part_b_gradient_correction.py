@@ -126,20 +126,31 @@ def gradient_correction(bayer):
  
     conv_G_on_R   = conv(G_AT_R)
     conv_G_on_B   = conv(G_AT_B)
-    conv_R_on_GRrowBcol  = conv(R_AT_G_RRow_BCol)
-    conv_R_on_GBrowRcol  = conv(R_AT_G_BRow_RCol)
+    conv_R_on_GRrow  = conv(R_AT_G_RRow_BCol)
+    conv_R_on_GBrow  = conv(R_AT_G_BRow_RCol)
     conv_R_on_B   = conv(R_AT_B)
-    conv_B_on_GBrowRcol  = conv(B_AT_G_BRow_RCol)
-    conv_B_on_GRrowBcol  = conv(B_AT_G_RRow_BCol)
+    conv_B_on_GBrow  = conv(B_AT_G_BRow_RCol)
+    conv_B_on_GRrow  = conv(B_AT_G_RRow_BCol)
     conv_B_on_R   = conv(B_AT_R)
     
     # Constructing the filtered blue channel
-
     B_out = np.where(is_R, conv_B_on_R, B_in)
-    B_out = np.where(is_)
+    B_out = np.where(is_Gr,conv_B_on_GRrow,B_in)
+    B_out = np.where(is_Gb,conv_B_on_GBrow,B_in)
     # Constructing the filtered green channel
     G_out = np.where(is_R, conv_G_on_R, G_in)
     G_out = np.where(is_B, conv_G_on_B, G_in)
+    # Constructing the filtered red channel
+    R_out = np.where(is_B, conv_R_on_B, R_in)
+    R_out = np.where(is_Gr,conv_R_on_GRrow,R_in)
+    R_out = np.where(is_Gb,conv_R_on_GBrow,R_in)
+
+    B_out = np.clip(B_out,0,255).astype(np.uint8)
+    G_out = np.clip(G_out,0,255).astype(np.uint8)
+    R_out = np.clip(R_out,0,255).astype(np.uint8)
+
+    bgr = cv2.merge([B_out, G_out, R_out])
+    
 
     
 
