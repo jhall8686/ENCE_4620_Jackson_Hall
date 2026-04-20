@@ -39,7 +39,7 @@ def main():
 
     equalized_images = []
     for i, img in enumerate(images):
-        img_eq = eqs[i].flatten()[img]
+        img_eq = eqs[i][img]
         equalized_images.append(img_eq)
 
     CV_equalized_images = []
