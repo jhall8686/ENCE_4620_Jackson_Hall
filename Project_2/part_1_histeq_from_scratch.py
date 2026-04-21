@@ -7,6 +7,17 @@ IMG_DIR = 'source_images'
 levels = 256
 
 def hist_eq(imgs, L):
+    """
+    hist_eq
+    Args:
+        imgs (list of numpy.ndarray): A list of input images (grayscale or single-channel).
+        L (int): The number of intensity levels (e.g., 256 for 8-bit images).
+    Returns:
+        tuple: A tuple containing three lists:
+            - hists (list of numpy.ndarray): Normalized histograms/PDFs for each image
+            - cdfs (list of numpy.ndarray): CDFs for each image
+            - eqs (list of numpy.ndarray): Equalized histograms for each image, scaled to [0, L-1].
+    """
     hists = []
     cdfs =  []
     eqs =   []
@@ -27,6 +38,7 @@ def hist_eq(imgs, L):
     return hists, cdfs, eqs
 
 def main():
+    # Read images from directory
     images = []
     for path in glob.glob(os.path.join(IMG_DIR, '*.tif')):
         src = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
@@ -35,13 +47,16 @@ def main():
         else:
             raise FileNotFoundError(f'Could not load image at path {path}')
 
+    # Perform histogram equalization
     hists, cdfs, eqs = hist_eq(images, levels)
 
+    # Apply equalized histogram transformation to each image
     equalized_images = []
     for i, img in enumerate(images):
         img_eq = eqs[i][img]
         equalized_images.append(img_eq)
 
+    # Do the same with the cv2 method
     CV_equalized_images = []
     for img in images:
         img_eq = cv2.equalizeHist(img)
@@ -49,6 +64,7 @@ def main():
 
     # PLOTTING
 
+    # Histograms, CDFS, and Equalized Histogram Values
     # labels = ['Circuit', 'Forest']
     # colors = ['black', 'green']
     # data = [hists, cdfs, eqs]
@@ -67,6 +83,8 @@ def main():
 
     # plt.tight_layout()
     # plt.show()
+
+    # Plot all three sets of images: Original, from-scratch equalization, and OpenCV equalization
 
     fig, axes = plt.subplots(3, len(images), figsize=(12, 12))
 
