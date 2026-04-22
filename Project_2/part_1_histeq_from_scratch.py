@@ -1,9 +1,9 @@
 import cv2
-import os
-import glob
+from pathlib import Path
 import matplotlib.pyplot as plt
 
 IMG_DIR = 'source_images'
+extensions = ('*.tif','*.jpg')
 levels = 256
 
 def hist_eq(imgs, L):
@@ -40,13 +40,15 @@ def hist_eq(imgs, L):
 def main():
     # Read images from directory
     images = []
-    for path in glob.glob(os.path.join(IMG_DIR, '*.tif')):
-        src = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-        if src is not None: #<- I just learned that 'is not' does a memory comparison. kinda cool
-            images.append(src)
-        else:
-            raise FileNotFoundError(f'Could not load image at path {path}')
-
+    IMG_DIR = Path(IMG_DIR)
+    for path in IMG_DIR.iterdir():
+        if path.suffix.lower() in extensions:
+            src = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
+            if src is not None: #<- I just learned that 'is not' does a object identity check.
+                images.append(src)
+            else:
+                raise FileNotFoundError(f'Could not load image at path {path}')
+    
     # Perform histogram equalization
     hists, cdfs, eqs = hist_eq(images, levels)
 
