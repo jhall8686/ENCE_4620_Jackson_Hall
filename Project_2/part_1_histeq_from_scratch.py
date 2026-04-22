@@ -3,7 +3,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 IMG_DIR = 'source_images'
-extensions = ('*.tif','*.jpg')
+extensions = ('.tif','.jpg')
 levels = 256
 
 def hist_eq(imgs, L):
@@ -13,10 +13,7 @@ def hist_eq(imgs, L):
         imgs (list of numpy.ndarray): A list of input images (grayscale or single-channel).
         L (int): The number of intensity levels (e.g., 256 for 8-bit images).
     Returns:
-        tuple: A tuple containing three lists:
-            - hists (list of numpy.ndarray): Normalized histograms/PDFs for each image
-            - cdfs (list of numpy.ndarray): CDFs for each image
-            - eqs (list of numpy.ndarray): Equalized histograms for each image, scaled to [0, L-1].
+        eqs (list of numpy.ndarray): Equalized histograms for each image, scaled to [0, L-1].
     """
     hists = []
     cdfs =  []
@@ -35,22 +32,37 @@ def hist_eq(imgs, L):
         eq = (cdf*(L-1)).round()
         eqs.append(eq)
         
-    return hists, cdfs, eqs
+    return eqs
 
-def main():
+def read_imgs(IMG_DIR, ext=('.tif','.jpg')):
+    """
+    read_imgs
+    Description:
+        Reads a directory and returns a list containing all images in the directory with given extensions (GRAYSCALE)
+    Args:
+        IMG_DIR (str): path to image directory
+        ext (tuple of str): file extensions to be grabbed. Default: ('.tif','.jpg')
+    Returns:
+        images (list of np.ndarray): List of all images in IMG_DIR with extensions in ext
+    """
     # Read images from directory
     images = []
-    IMG_DIR = Path(IMG_DIR)
-    for path in IMG_DIR.iterdir():
-        if path.suffix.lower() in extensions:
+    img_dir = Path(IMG_DIR)
+    for path in img_dir.iterdir():
+        if path.suffix.lower() in ext:
             src = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
             if src is not None: #<- I just learned that 'is not' does a object identity check.
                 images.append(src)
             else:
                 raise FileNotFoundError(f'Could not load image at path {path}')
+    return images
+
+
+def main():
+    images = read_imgs(IMG_DIR)
     
     # Perform histogram equalization
-    hists, cdfs, eqs = hist_eq(images, levels)
+    eqs = hist_eq(images, levels)
 
     # Apply equalized histogram transformation to each image
     equalized_images = []
@@ -64,7 +76,7 @@ def main():
         img_eq = cv2.equalizeHist(img)
         CV_equalized_images.append(img_eq)
 
-    # PLOTTING
+    # PLOTTING hist/cdf/eq (only worked with previous version of the function that outputted all of these)
 
     # Histograms, CDFS, and Equalized Histogram Values
     # labels = ['Circuit', 'Forest']
@@ -88,7 +100,7 @@ def main():
 
     # Plot all three sets of images: Original, from-scratch equalization, and OpenCV equalization
 
-    fig, axes = plt.subplots(3, len(images), figsize=(12, 12))
+    fig, axes = plt.subplots(3, len(images), figsize=(16, 12))
 
     for i, (img, eq_img, cv_eq_img) in enumerate(zip(images, equalized_images, CV_equalized_images)):
         axes[0, i].imshow(img, cmap='gray')
