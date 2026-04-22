@@ -9,28 +9,33 @@ TGT_IMG_DIR = 'target_images'
 extensions = ('*.tif','*.jpg')
 levels = 256
 
-def hist_matching(src_img, tgt_img, L):
+def hist_matching(src_imgs, tgt_imgs, L):
     """
     hist_matching
     Args:
-        src_img (np.ndarray): The image to be processed
-        tgt_img (np.ndarray): The image to be matched to
+        src_imgs (list of np.ndarray): The images to be processed
+        tgt_imgs (list of np.ndarray): The images to be matched to
         L (int): The number of levels (bins) in the image
     Returns:
-        matched_img (np.ndarray): The matched image
+        matched_imgs (list of np.ndarray): The matched images
     """
 
     # equalize source and target images to get sk = T(rk), vk = G(zk)
-    src_eq = hist_eq([src_img],L)
-    tgt_eq = hist_eq([tgt_img],L)
 
-    print(src_eq[0])
-    # define look up table by finding the closest value in the target cdf (vk) for each pixel in the source cdf (sk)
+    src_eqs = hist_eq(src_imgs, L)
+    tgt_eqs = hist_eq(tgt_imgs, L)
     
-    lut = np.array([np.argmin(np.abs(tgt_eq-src_eq[0][i])) for i in range(L-1)])
+    # define look up table by finding the closest value in the target cdf (vk) for each pixel in the source cdf (sk)
+    luts = []
+    for (src_eq, tgt_eq) in zip(src_eqs, tgt_eqs):
+        lut = [np.astype(np.argmin(np.abs(tgt_eq - src_eq[i])),np.uint8) for i in range(L-1)]
+        luts.append(lut)
+    matched_imgs = []
+    for (src_img, lut) in zip(src_imgs, luts):
+        matched_img = lut[src_img]
+        matched_imgs.append(matched_img)
+    return matched_imgs
 
-    matched_img = lut[np.uint8(src_eq[0])]
-    return matched_img
 
 def main():
     # Read images from directory
@@ -39,11 +44,8 @@ def main():
     tgt_images = read_imgs(TGT_IMG_DIR)
     print('read images')
 
-    matched_images = []
-    for (src_img, tgt_img) in zip(src_images, tgt_images):
-        matched_img = hist_matching(src_img, tgt_img, levels)
-        matched_images.append(matched_img)
-
+    matched_images = hist_matching(src_images,tgt_images,levels)
+    
     print('matched images')
 
     fig, axes = plt.subplots(3, len(src_images), figsize=(16, 12))
