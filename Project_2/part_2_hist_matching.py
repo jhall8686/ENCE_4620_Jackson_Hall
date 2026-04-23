@@ -23,8 +23,8 @@ def hist_matching(src_imgs, tgt_imgs, L):
 
     # equalize source and target images to get sk = T(rk), vk = G(zk)
 
-    src_cdfs, src_eqs = hist_eq(src_imgs, L)
-    tgt_cdfs, tgt_eqs = hist_eq(tgt_imgs, L)
+    src_cdfs, _ = hist_eq(src_imgs, L)
+    tgt_cdfs, _ = hist_eq(tgt_imgs, L)
     
     # define look up table by finding the closest value in the target cdf (vk) for each pixel in the source cdf (sk)
     matched_imgs = []
@@ -67,6 +67,9 @@ def main():
     plt.show()
 
     # COMPARISON- Source image, my implemented method, skimage method
+
+    fig, axes = plt.subplots(3, len(src_images), figsize=(16, 12))
+
     for i, (src_img, matched_img, sk_matched_img) in enumerate(zip(src_images, matched_images, sk_matched_images)):
         axes[0, i].imshow(src_img, cmap='gray')
         axes[0, i].set_title(f'Source Image {i+1}')
