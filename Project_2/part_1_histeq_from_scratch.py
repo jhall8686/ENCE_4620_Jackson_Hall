@@ -32,7 +32,7 @@ def hist_eq(imgs, L):
         eq = (cdf*(L-1)).round()
         eqs.append(eq)
         
-    return eqs
+    return cdfs, eqs
 
 def read_imgs(IMG_DIR, ext=('.tif','.jpg')):
     """
@@ -48,8 +48,8 @@ def read_imgs(IMG_DIR, ext=('.tif','.jpg')):
     # Read images from directory
     images = []
     img_dir = Path(IMG_DIR)
-    for path in img_dir.iterdir():
-        if path.suffix.lower() in ext:
+    for e in ext:
+        for path in img_dir.glob(f'*{e}'):
             src = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
             if src is not None: #<- I just learned that 'is not' does a object identity check.
                 images.append(src)
@@ -62,7 +62,7 @@ def main():
     images = read_imgs(IMG_DIR)
     
     # Perform histogram equalization
-    eqs = hist_eq(images, levels)
+    cdfs, eqs = hist_eq(images, levels)
 
     # Apply equalized histogram transformation to each image
     equalized_images = []
