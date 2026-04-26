@@ -68,20 +68,20 @@ def main():
 
     # COMPARISON- Source image, my implemented method, skimage method
 
-    fig, axes = plt.subplots(3, len(src_images), figsize=(16, 12))
+    fig2, axes2 = plt.subplots(3, len(src_images), figsize=(16, 12))
 
     for i, (src_img, matched_img, sk_matched_img) in enumerate(zip(src_images, matched_images, sk_matched_images)):
-        axes[0, i].imshow(src_img, cmap='gray')
-        axes[0, i].set_title(f'Source Image {i+1}')
-        axes[0, i].axis('off')
+        axes2[0, i].imshow(src_img, cmap='gray')
+        axes2[0, i].set_title(f'Source Image {i+1}')
+        axes2[0, i].axis('off')
 
-        axes[1, i].imshow(matched_img, cmap='gray')
-        axes[1, i].set_title(f'Target Image {i+1}')
-        axes[1, i].axis('off')
+        axes2[1, i].imshow(matched_img, cmap='gray')
+        axes2[1, i].set_title(f'Matched Image {i+1}')
+        axes2[1, i].axis('off')
 
-        axes[2, i].imshow(sk_matched_img, cmap='gray')
-        axes[2, i].set_title(f'Histogram Matched Image {i+1}')
-        axes[2, i].axis('off')
+        axes2[2, i].imshow(sk_matched_img, cmap='gray')
+        axes2[2, i].set_title(f'SciKit Matched Image {i+1}')
+        axes2[2, i].axis('off')
     plt.tight_layout()
     plt.show()
 
